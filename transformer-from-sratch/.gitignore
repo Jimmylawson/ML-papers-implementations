@@ -1,0 +1,16 @@
+__pycache__/
+*.py[cod]
+.ipynb_checkpoints/
+.venv/
+.DS_Store
+
+# Training artifacts
+*.pth
+*.pt
+checkpoints/
+runs/
+
+# Secrets
+.env
+.env.*
+!.env.example
