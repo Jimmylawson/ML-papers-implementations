@@ -1,0 +1,25 @@
+# IDE and system files
+.idea/
+.vscode/
+.DS_Store
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+
+# Jupyter
+.ipynb_checkpoints/
+
+# Model weights and training artifacts
+*.pt
+*.pth
+*.ckpt
+checkpoints/
+runs/
+
+# Secrets
+.env
+.env.*
+!.env.example
