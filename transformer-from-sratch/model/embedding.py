@@ -18,3 +18,5 @@ class InputEmbedding(nn.Module):
         x = self.embedding(x) * math.sqrt(self.d_model)
         #return the embeddings
         return x
+
+

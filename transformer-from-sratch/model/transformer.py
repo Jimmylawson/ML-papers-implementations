@@ -1,40 +1,80 @@
 import torch.nn as nn
 import torch
-from model.encoder import Encoder
-from model.decoder import Decoder
+from pyparsing import PositionToken
+from sympy.utilities.codegen import InputArgument
 
+from model.FeedForward import FeedForwardNetwork
+from model.attention import MultiHeadAttentionBlock
+from model.embedding import InputEmbedding
+from model.encoder import Encoder, EncoderBlock
+from model.decoder import Decoder, ProjectionLayer, DecoderBlock
+from model.positional_encoding import PositionalEncoding
 
 
 class Transformer(nn.Module):
-    def __init__(
-            self,
-            src_vocab_size,
-            tgt_vocab_size,
-            d_model=512,
-            num_heads=8,
-            d_ff=2048,
-            num_layers=6,
-            dropout=0.1
-    ):
+    def __init__( self,encoder:Encoder,decoder:Decoder,src_embedding:InputEmbedding,tgt_embedding:InputEmbedding,
+                  src_pos:PositionalEncoding,tgt_pos:PositionalEncoding,projection_layer:ProjectionLayer):
         super().__init__()
+        self.encoder = encoder
+        self.decoder = decoder
+        self.src_embed = src_embedding
+        self.tgt_embed = tgt_embedding
+        self.src_pos = src_pos
+        self.tgt_pos = tgt_pos
+        self.projection_layer = projection_layer
 
-        self.encoder = Encoder(
-            src_vocab_size, d_model, num_heads,
-            d_ff, num_layers, dropout
-        )
+    def encode(self,src,src_mask):
+        src = self.src_embed(src)
+        src = self.src_pos(src)
+        return self.encoder(src,src_mask)
+    def decode(self,encoder_output,src_mask,tgt,tgt_mask):
+        tgt = self.tgt_embed(tgt)
+        tgt = self.tgt_pos(tgt)
+        return self.decoder(tgt,encoder_output,src_mask,tgt_mask)
 
-        self.decoder = Decoder(
-            tgt_vocab_size, d_model, num_heads,
-            d_ff, num_layers, dropout
-        )
+    def project(self,x):
+        return self.projection_layer(x)
 
-        self.output_prediction = nn.Linear(
-            d_model, tgt_vocab_size
-        )
+def build_transformer(src_vocab_size:int,tgt_vocab_size:int,src_seq_len:int,tgt_seq_len:int,d_model:int = 512,N: int = 6, h: int=8,dropout:float = 0.1,d_ff:int = 2048) ->Transformer:
+    #Create the embedding layers
+    src_embed = InputEmbedding(src_vocab_size,d_model)
+    tgt_embed = InputEmbedding(tgt_vocab_size,d_model)
 
-    def forward(self,src_token,tgt_token,src_mask=None,tgt_mask=None):
-        encoder = self.encoder(src_token,src_mask)
-        decoder = self.decoder(tgt_token,encoder,causal_mask=tgt_mask,src_mask=src_mask)
-        output = self.output_prediction(decoder)
-        return output # Gives us  raw logits -> a linear transformation L = HW + b
+    #Create the positional encoding layers
+    src_pos = PositionalEncoding(d_model,src_seq_len, dropout)
+    tgt_pos = PositionalEncoding(d_model,tgt_seq_len, dropout)
 
+    #Create the encoder blocks
+    encoder_blocks = []
+    for _ in range(N):
+        encoder_self_attention_block = MultiHeadAttentionBlock(d_model,h,dropout)
+        ffn_block = FeedForwardNetwork(d_model,d_ff,dropout)
+        encoder_block = EncoderBlock(encoder_self_attention_block,ffn_block,dropout)
+        encoder_blocks.append(encoder_block)
+
+    #Create the decoder blocks
+    decoder_blocks = []
+    for _ in range(N):
+        decoder_self_attention_block  = MultiHeadAttentionBlock(d_model,h,dropout)
+        decoder_cross_attention_block = MultiHeadAttentionBlock(d_model,h,dropout)
+        ffn_block = FeedForwardNetwork(d_model,d_ff,dropout)
+        decoder_block = DecoderBlock(decoder_self_attention_block,decoder_cross_attention_block, ffn_block,dropout)
+        decoder_blocks.append(decoder_block)
+
+    #Create the encoder and the decoder
+    encoder = Encoder(nn.ModuleList(encoder_blocks))
+    decoder = Decoder(nn.ModuleList(decoder_blocks))
+
+    #Creat the projection layer
+    projection_layer = ProjectionLayer(d_model,tgt_vocab_size)
+
+    #Create the transformer
+    transformer = Transformer(encoder,decoder, src_embed,tgt_embed,src_pos,tgt_pos,projection_layer)
+
+    #Initialize the parameters
+
+    for p in transformer.parameters():
+        if p.dim() > 1:
+            nn.init.xavier_uniform_(p)
+
+    return transformer
