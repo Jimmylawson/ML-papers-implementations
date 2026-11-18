@@ -30,7 +30,7 @@ class PositionalEncoding(nn.Module):
     def forward(self, x):
         # Add positional encodings to token embeddings
         x = x + self.p_e[:, :x.shape[1], :]
-        return x
+        return self.dropout(x)
 
 
 class LayerNormalization(nn.Module):

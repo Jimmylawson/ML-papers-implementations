@@ -11,14 +11,8 @@ from tokenizers.pre_tokenizers import Whitespace #Split the word according to wh
 from pathlib import Path
 from config import get_config
 
-config = get_config()
-
 from dataset import BilingualDataset
 
-trainer = WordLevelTrainer(
-     vocab_size=config["vocab_size"],
-     special_tokens=["[UNK]","[PAD]","[SOS]","[EOS]"]
-)
 def get_all_sentences(ds,lang):
      for item in ds:
           # yield produce one sentence at a time rather than creating a list containing every sentence
@@ -27,7 +21,7 @@ def get_all_sentences(ds,lang):
 def get_ds(config):
      ds = load_dataset(
           "Helsinki-NLP/opus_books",
-          "en-it",
+          f"{config['lang_src']}-{config['lang_tgt']}",
           split="train"
      )
      train_size = int(0.9 * len(ds))
@@ -40,6 +34,28 @@ def get_ds(config):
      tokenizer_tgt = get_or_build_tokenizer(
           config, train_raw, config["lang_tgt"]
      )
+
+     def fits_sequence_length(example):
+          translation = example["translation"]
+          src_length = len(tokenizer_src.encode(translation[config["lang_src"]]).ids)
+          tgt_length = len(tokenizer_tgt.encode(translation[config["lang_tgt"]]).ids)
+          # Source needs SOS and EOS; decoder input/labels each need one.
+          return (
+               src_length + 2 <= config["seq_len"]
+               and tgt_length + 1 <= config["seq_len"]
+          )
+
+     train_count, val_count = len(train_raw), len(val_raw)
+     train_raw = [example for example in train_raw if fits_sequence_length(example)]
+     val_raw = [example for example in val_raw if fits_sequence_length(example)]
+     print(f"Training pairs removed: {train_count - len(train_raw)}")
+     print(f"Validation pairs removed: {val_count - len(val_raw)}")
+
+     if not train_raw or not val_raw:
+          raise ValueError(
+               "Sequence-length filtering left an empty training or validation split. "
+               "Increase config['seq_len'] or use more data."
+          )
 
      #Converts the  those sentences into the token IDs,padding,labels, and attention
      #Maks your Transformer needs
@@ -189,6 +205,7 @@ def train_model(config):
               f"| Train Loss: {train_loss:.4f} "
               f"| Val Loss: {val_loss:.4f}"
          )
+     return model
 
 
 
@@ -238,6 +255,10 @@ def get_or_build_tokenizer(config,ds,lang):
           if tokenizer_path.exists():
                tokenizer =Tokenizer.from_file(str(tokenizer_path))
           else:
+               trainer = WordLevelTrainer(
+                    vocab_size=config["vocab_size"],
+                    special_tokens=["[UNK]", "[PAD]", "[SOS]", "[EOS]"]
+               )
                tokenizer = Tokenizer(WordLevel(unk_token="[UNK]"))
                tokenizer.pre_tokenizer = Whitespace()
                tokenizer.train_from_iterator(get_all_sentences(ds,lang), trainer=trainer)

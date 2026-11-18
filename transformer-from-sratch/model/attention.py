@@ -1,7 +1,6 @@
 import torch
 import math
 import torch.nn as nn
-from aiohttp._websocket import mask
 
 
 def scaled_dot_product_attention(Q,K,V,mask=None):
