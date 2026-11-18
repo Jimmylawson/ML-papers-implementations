@@ -29,13 +29,13 @@ class PositionalEncoding(nn.Module):
 
     def forward(self, x):
         # Add positional encodings to token embeddings
-        x = x + (self.pe[:,:x.shape[1],:]).requires_grad_(False)
+        x = x + self.p_e[:, :x.shape[1], :]
         return x
 
 
 class LayerNormalization(nn.Module):
     def __init__(self,eps:float = 10**-6):
-        super.__init__()
+        super().__init__()
         self.eps = eps
         self.alpha = nn.Parameter(torch.ones(1)) # Multiplied
         self.bias = nn.Parameter(torch.zeros(1)) # Added

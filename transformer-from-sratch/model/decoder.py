@@ -46,7 +46,6 @@ class ProjectionLayer(nn.Module):
 
     def forward(self,x):
         #(Batch,Seq_len,d_model) --> (Batch,Seq_len,Vocab_Size)
-
         return self.proj(x)
 
 
